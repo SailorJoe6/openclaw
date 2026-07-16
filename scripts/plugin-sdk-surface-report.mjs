@@ -91,6 +91,9 @@ function readPluginSdkEntrypointBudgetEnv(name, fallback, env = process.env) {
 }
 
 const defaultPublicDeprecatedExportsByEntrypointBudget = Object.freeze({
+  // Codex owner plugin consumes its own third-party-deprecated auth marker
+  // through the SDK until the owner-local wrapper move lands.
+  "agent-runtime": 1,
   core: 2,
   health: 1,
   "command-gating": 5,
@@ -214,8 +217,8 @@ export function readPluginSdkSurfaceBudgets(env = process.env) {
       // +4: group scope encoder/key builder (channel-policy + compat mirror).
       // Used-union narrowing: 31 wildcard barrels, 10,612 -> 7,919 exports.
       // +3: proxy stream API retained until agent-core demotion; -6: parallel
-      // main harvests (qa-live-transport-scenarios retirement).
-      7916,
+      // main harvests; +2: codex usage marker + scaffold ProviderPlugin pins.
+      7918,
       env,
     ),
     publicFunctionExports: readPluginSdkSurfaceBudgetEnv(
@@ -231,8 +234,8 @@ export function readPluginSdkSurfaceBudgets(env = process.env) {
       "OPENCLAW_PLUGIN_SDK_MAX_PUBLIC_DEPRECATED_EXPORTS",
       // +2: group scope encoder/key builder mirrored by deprecated compat.
       // Used-union narrowing (3,262 -> 2,885) plus 77 newly windowed
-      // zero-consumer subpath exports entering their removal window.
-      2962,
+      // zero-consumer subpath exports, plus the codex-owner auth marker pin.
+      2963,
       env,
     ),
     publicWildcardReexports: readPluginSdkSurfaceBudgetEnv(
