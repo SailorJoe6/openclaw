@@ -5,6 +5,7 @@ import { afterAll, beforeAll, afterEach, beforeEach, describe, expect, it } from
 import type { OpenClawConfig } from "../config/config.js";
 import {
   resolveConfiguredTtsMode,
+  resolveConfiguredTtsProgress,
   resolveEffectiveTtsConfig,
   shouldAttemptTtsPayload,
 } from "./tts-config.js";
@@ -102,6 +103,10 @@ describe("shouldAttemptTtsPayload", () => {
     expect(resolveConfiguredTtsMode(cfg, "voice")).toBe("all");
     expect(shouldAttemptTtsPayload({ cfg, agentId: "main" })).toBe(false);
     expect(resolveConfiguredTtsMode(cfg, "main")).toBe("final");
+    expect(resolveConfiguredTtsProgress(cfg, "main")).toEqual({
+      durableStatus: "off",
+      livePreview: "off",
+    });
   });
 
   it("merges channel and account TTS overrides after agent overrides", () => {
@@ -110,6 +115,10 @@ describe("shouldAttemptTtsPayload", () => {
         tts: {
           auto: "off",
           mode: "final",
+          progress: {
+            durableStatus: "off",
+            livePreview: "off",
+          },
           provider: "openai",
           providers: {
             openai: {
@@ -124,6 +133,9 @@ describe("shouldAttemptTtsPayload", () => {
           {
             id: "reader",
             tts: {
+              progress: {
+                durableStatus: "immediate",
+              },
               providers: {
                 openai: {
                   voice: "nova",
@@ -142,6 +154,9 @@ describe("shouldAttemptTtsPayload", () => {
             EnglishBot: {
               tts: {
                 mode: "all",
+                progress: {
+                  livePreview: "immediate",
+                },
                 providers: {
                   openai: {
                     voice: "shimmer",
@@ -162,8 +177,35 @@ describe("shouldAttemptTtsPayload", () => {
 
     expect(resolved.auto).toBe("always");
     expect(resolved.mode).toBe("all");
+    expect(
+      resolveConfiguredTtsProgress(cfg, {
+        agentId: "reader",
+        channelId: "FEISHU",
+        accountId: "englishbot",
+      }),
+    ).toEqual({
+      durableStatus: "immediate",
+      livePreview: "immediate",
+    });
     expect(resolved.provider).toBe("openai");
     expect(resolved.providers?.openai?.model).toBe("gpt-4o-mini-tts");
     expect(resolved.providers?.openai?.voice).toBe("shimmer");
+  });
+
+  it("keeps progress TTS policy independent from all-reply mode", () => {
+    const cfg = {
+      messages: {
+        tts: {
+          auto: "always",
+          mode: "all",
+        },
+      },
+    } as OpenClawConfig;
+
+    expect(resolveConfiguredTtsMode(cfg)).toBe("all");
+    expect(resolveConfiguredTtsProgress(cfg)).toEqual({
+      durableStatus: "off",
+      livePreview: "off",
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/types.js";
-import type { TtsAutoMode, TtsConfig, TtsMode } from "../config/types.tts.js";
+import type { TtsAutoMode, TtsConfig, TtsMode, TtsProgressConfig } from "../config/types.tts.js";
 import { normalizeAccountId, normalizeAgentId } from "../routing/session-key.js";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -17,6 +17,13 @@ export type TtsConfigResolutionContext = {
   agentId?: string;
   channelId?: string;
   accountId?: string;
+};
+
+export type ResolvedTtsProgressConfig = Required<TtsProgressConfig>;
+
+const DEFAULT_TTS_PROGRESS_CONFIG: ResolvedTtsProgressConfig = {
+  durableStatus: "off",
+  livePreview: "off",
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -142,6 +149,17 @@ export function resolveConfiguredTtsMode(
   contextOrAgentId?: string | TtsConfigResolutionContext,
 ): TtsMode {
   return resolveEffectiveTtsConfig(cfg, contextOrAgentId).mode ?? "final";
+}
+
+export function resolveConfiguredTtsProgress(
+  cfg: OpenClawConfig,
+  contextOrAgentId?: string | TtsConfigResolutionContext,
+): ResolvedTtsProgressConfig {
+  const progress = resolveEffectiveTtsConfig(cfg, contextOrAgentId).progress ?? {};
+  return {
+    durableStatus: progress.durableStatus ?? DEFAULT_TTS_PROGRESS_CONFIG.durableStatus,
+    livePreview: progress.livePreview ?? DEFAULT_TTS_PROGRESS_CONFIG.livePreview,
+  };
 }
 
 function resolveTtsPrefsPathValue(prefsPath: string | undefined): string {
