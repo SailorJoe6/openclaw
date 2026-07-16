@@ -38,6 +38,8 @@ export const KNIP_OPTIONAL_UNUSED_FILE_ALLOWLIST = [
   "extensions/discord/configured-state.ts",
   // Loaded at runtime via loadBundledPluginPublicSurfaceModuleSync (src/plugin-sdk/qa-lab.ts).
   "extensions/qa-lab/cli.ts",
+  // Consumed by the qa-lab web bundle (web/src/app.ts), outside knip's production graph.
+  "extensions/qa-lab/model-selection.ts",
   "extensions/qa-lab/src/auth-profile.fixture.ts",
   "extensions/qa-lab/src/codex-plugin.fixture.ts",
   "extensions/qa-lab/src/mantis-phase-timer.runtime.ts",
