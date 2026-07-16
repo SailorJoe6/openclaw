@@ -221,9 +221,10 @@ export function readPluginSdkSurfaceBudgets(env = process.env) {
       // +2: materializeRequesterScopedMcpToolsForHarnessRun (agent-harness-runtime + compat mirror).
       // +1: matchesNoProxy exposes canonical Undici-compatible bypass selection to plugins.
       // +4: group scope encoder/key builder (channel-policy + compat mirror).
+      // +9: app-guided provider setup context/candidate/hook types and their public mirrors.
       // Harvest: channel-ingress -64; dead channel-message dispatch aliases -23.
       // Harvest: retired qa-live-transport-scenarios subpath -6.
-      10606,
+      10615,
       env,
     ),
     publicFunctionExports: readPluginSdkSurfaceBudgetEnv(
