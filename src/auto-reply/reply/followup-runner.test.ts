@@ -1253,6 +1253,90 @@ describe("createFollowupRunner progress forwarding", () => {
     expect(requireMockCallArg(routeReplyMock, 1).mirror).toBeUndefined();
   });
 
+  it("drains queued retained progress callbacks before final delivery", async () => {
+    const queued = createQueuedRun({
+      originatingChannel: "discord",
+      originatingTo: "channel:C1",
+      originatingAccountId: "acct-1",
+      originatingThreadId: "thread-1",
+      run: {
+        messageProvider: "discord",
+        verboseLevel: "on",
+      },
+    });
+    let releasePlanUpdate: (() => void) | undefined;
+    const onPlanUpdate = vi.fn(
+      async () =>
+        await new Promise<void>((resolve) => {
+          releasePlanUpdate = resolve;
+        }),
+    );
+    const onItemEvent = vi.fn(async () => {});
+    const onApprovalEvent = vi.fn(async () => {});
+    const onPatchSummary = vi.fn(async () => {});
+
+    runEmbeddedPiAgentMock.mockImplementationOnce(
+      async (args: {
+        onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => Promise<void>;
+      }) => {
+        void args.onAgentEvent?.({
+          stream: "plan",
+          data: { phase: "update", explanation: "queued retained plan" },
+        });
+        await args.onAgentEvent?.({
+          stream: "item",
+          data: { itemId: "item-1", phase: "update", progressText: "queued item" },
+        });
+        await args.onAgentEvent?.({
+          stream: "approval",
+          data: { phase: "requested", status: "pending", command: "pnpm test" },
+        });
+        await args.onAgentEvent?.({
+          stream: "patch",
+          data: { itemId: "patch-1", phase: "end", summary: "queued patch" },
+        });
+        return { payloads: [{ text: "final reply" }], meta: { agentMeta: {} } };
+      },
+    );
+
+    const runner = createFollowupRunner({
+      opts: { onPlanUpdate, onItemEvent, onApprovalEvent, onPatchSummary },
+      typing: createMockTypingController(),
+      typingMode: "instant",
+      defaultModel: "claude",
+    });
+
+    const runPromise = runner(queued);
+    await vi.waitFor(() => {
+      expect(onPlanUpdate).toHaveBeenCalledTimes(1);
+    });
+    expect(routeReplyMock).not.toHaveBeenCalled();
+
+    releasePlanUpdate?.();
+    await runPromise;
+
+    expect(onPlanUpdate).toHaveBeenCalledWith({
+      phase: "update",
+      title: undefined,
+      explanation: "queued retained plan",
+      steps: undefined,
+      source: undefined,
+    });
+    expect(onItemEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: "item-1", phase: "update", progressText: "queued item" }),
+    );
+    expect(onApprovalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "requested", status: "pending", command: "pnpm test" }),
+    );
+    expect(onPatchSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: "patch-1", phase: "end", summary: "queued patch" }),
+    );
+    expect(routeReplyMock).toHaveBeenCalledTimes(1);
+    expect(requireMockCallArg(routeReplyMock, 0).payload).toEqual(
+      expect.objectContaining({ text: "final reply" }),
+    );
+  });
+
   it("preserves queued verbose progress when default tool progress is suppressed", async () => {
     const onToolStart = vi.fn(async () => {});
     const onCommandOutput = vi.fn(async () => {});
