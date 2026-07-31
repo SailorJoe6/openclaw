@@ -7,7 +7,7 @@ import {
   normalizeOptionalString,
 } from "@openclaw/normalization-core/string-coerce";
 import type { OpenClawConfig } from "../config/types.js";
-import type { TtsAutoMode, TtsConfig, TtsMode } from "../config/types.tts.js";
+import type { TtsAutoMode, TtsConfig, TtsMode, TtsProgressConfig } from "../config/types.tts.js";
 import { normalizeAccountId, normalizeAgentId } from "../routing/session-key.js";
 import { resolveConfigDir, resolveUserPath } from "../utils.js";
 import { normalizeTtsAutoMode } from "./tts-auto-mode.js";
@@ -20,6 +20,13 @@ export type TtsConfigResolutionContext = {
   agentId?: string;
   channelId?: string;
   accountId?: string;
+};
+
+export type ResolvedTtsProgressConfig = Required<TtsProgressConfig>;
+
+const DEFAULT_TTS_PROGRESS_CONFIG: ResolvedTtsProgressConfig = {
+  durableStatus: "off",
+  livePreview: "off",
 };
 
 function deepMergeDefined(base: unknown, override: unknown): unknown {
@@ -145,6 +152,17 @@ export function resolveConfiguredTtsMode(
   contextOrAgentId?: string | TtsConfigResolutionContext,
 ): TtsMode {
   return resolveEffectiveTtsConfig(cfg, contextOrAgentId).mode ?? "final";
+}
+
+export function resolveConfiguredTtsProgress(
+  cfg: OpenClawConfig,
+  contextOrAgentId?: string | TtsConfigResolutionContext,
+): ResolvedTtsProgressConfig {
+  const progress = resolveEffectiveTtsConfig(cfg, contextOrAgentId).progress ?? {};
+  return {
+    durableStatus: progress.durableStatus ?? DEFAULT_TTS_PROGRESS_CONFIG.durableStatus,
+    livePreview: progress.livePreview ?? DEFAULT_TTS_PROGRESS_CONFIG.livePreview,
+  };
 }
 
 function resolveTtsPrefsPathValue(prefsPath: string | undefined): string {

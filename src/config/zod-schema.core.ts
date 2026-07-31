@@ -707,6 +707,7 @@ export const MarkdownConfigSchema = z
 
 export const TtsProviderSchema = z.string().min(1);
 export const TtsModeSchema = z.enum(["final", "all"]);
+export const TtsProgressModeSchema = z.enum(["off", "immediate"]);
 export const TtsAutoSchema = z.enum(["off", "always", "inbound", "tagged"]);
 const TtsProviderConfigSchema = z
   .object({
@@ -750,6 +751,13 @@ export const TtsConfigSchema = z
     auto: TtsAutoSchema.optional(),
     enabled: z.boolean().optional(),
     mode: TtsModeSchema.optional(),
+    progress: z
+      .object({
+        durableStatus: TtsProgressModeSchema.optional(),
+        livePreview: TtsProgressModeSchema.optional(),
+      })
+      .strict()
+      .optional(),
     provider: TtsProviderSchema.optional(),
     persona: z.string().optional(),
     personas: z.record(z.string(), TtsPersonaSchema).optional(),

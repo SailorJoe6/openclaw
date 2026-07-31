@@ -3,6 +3,39 @@ import { describe, expect, it } from "vitest";
 import { TtsConfigSchema } from "./zod-schema.core.js";
 
 describe("TtsConfigSchema openai speed and instructions", () => {
+  it("accepts explicit durable-status and live-preview progress TTS policy", () => {
+    const result = TtsConfigSchema.safeParse({
+      auto: "always",
+      mode: "final",
+      progress: {
+        durableStatus: "immediate",
+        livePreview: "off",
+      },
+      providers: {
+        openai: {
+          voice: "alloy",
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown progress TTS policy keys and modes", () => {
+    const result = TtsConfigSchema.safeParse({
+      progress: {
+        durableStatus: "later",
+        previewDraft: "immediate",
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path.join("."))).toEqual(
+        expect.arrayContaining(["progress.durableStatus", "progress"]),
+      );
+    }
+  });
+
   it("accepts speed and instructions in openai section", () => {
     const result = TtsConfigSchema.safeParse({
       providers: {

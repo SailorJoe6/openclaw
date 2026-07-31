@@ -1948,6 +1948,12 @@ export const FIELD_HELP: Record<string, string> = {
     "Removes the acknowledgment reaction after final reply delivery when enabled. Keep enabled for cleaner UX in channels where persistent ack reactions create clutter.",
   "messages.tts":
     "Text-to-speech policy for reading agent replies aloud on supported voice or audio surfaces. Keep disabled unless voice playback is part of your operator/user workflow.",
+  "messages.tts.progress":
+    "Progress/status TTS policy. Retained durable statuses and transient live previews are controlled separately.",
+  "messages.tts.progress.durableStatus":
+    'TTS policy for retained progress/status messages that remain visible after the turn. "off" keeps current text-only behavior; "immediate" allows prompt audio delivery.',
+  "messages.tts.progress.livePreview":
+    'TTS policy for transient replace-in-place preview updates. Defaults to "off" to avoid spoken preview spam.',
   "messages.tts.persona":
     "Default TTS persona id. Local TTS persona preferences can override this per host.",
   "messages.tts.personas":

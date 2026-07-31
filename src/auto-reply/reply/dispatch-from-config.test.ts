@@ -241,7 +241,14 @@ const ttsMocks = vi.hoisted(() => {
     normalizeTtsAutoMode: vi.fn((value: unknown) =>
       typeof value === "string" ? value : undefined,
     ),
-    resolveTtsConfig: vi.fn((_cfg: OpenClawConfig) => ({ mode: "final" })),
+    resolveTtsConfig: vi.fn(
+      (
+        _cfg: OpenClawConfig,
+      ): {
+        mode: string;
+        progress?: { durableStatus: "off" | "immediate"; livePreview: "off" | "immediate" };
+      } => ({ mode: "final" }),
+    ),
   };
 });
 const transcriptMocks = vi.hoisted(() => ({
@@ -647,6 +654,11 @@ vi.mock("./dispatch-acp-session.runtime.js", () => ({
 vi.mock("../../tts/tts-config.js", () => ({
   normalizeTtsAutoMode: (value: unknown) => ttsMocks.normalizeTtsAutoMode(value),
   resolveConfiguredTtsMode: (cfg: OpenClawConfig) => ttsMocks.resolveTtsConfig(cfg).mode,
+  resolveConfiguredTtsProgress: (cfg: OpenClawConfig) =>
+    ttsMocks.resolveTtsConfig(cfg).progress ?? {
+      durableStatus: "off",
+      livePreview: "off",
+    },
   shouldCleanTtsDirectiveText: () => true,
   shouldAttemptTtsPayload: () => true,
 }));
@@ -4745,6 +4757,156 @@ describe("dispatchReplyFromConfig", () => {
       isStatusNotice: true,
     });
     expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({ text: "done" });
+  });
+
+  it("adds an audio-only supplement for durable plan updates when progress TTS is immediate", async () => {
+    setNoAbort();
+    ttsMocks.state.synthesizeFinalAudio = true;
+    ttsMocks.resolveTtsConfig.mockReturnValue({
+      mode: "final",
+      progress: {
+        durableStatus: "immediate",
+        livePreview: "off",
+      },
+    });
+    const cfg = {
+      ...emptyConfig,
+      messages: {
+        ...emptyConfig.messages,
+        tts: { progress: { durableStatus: "immediate", livePreview: "off" } },
+      },
+      agents: {
+        defaults: {
+          verboseDefault: "on",
+        },
+      },
+    } satisfies OpenClawConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      ChatType: "direct",
+    });
+
+    const replyResolver = async (_ctx: MsgContext, opts?: GetReplyOptions) => {
+      await opts?.onPlanUpdate?.({
+        phase: "update",
+        explanation: "Inspect code, patch it, run tests.",
+      });
+      return undefined;
+    };
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+
+    expect(dispatcher.sendToolResult).toHaveBeenCalledTimes(2);
+    expect(dispatcher.sendToolResult).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: "Inspect code, patch it, run tests.",
+        isStatusNotice: true,
+      }),
+    );
+    const supplement = (dispatcher.sendToolResult as ReturnType<typeof vi.fn>).mock
+      .calls[1]?.[0] as ReplyPayload | undefined;
+    expect(supplement?.text).toBeUndefined();
+    expect(supplement?.mediaUrl).toBe("https://example.com/tts-synth.opus");
+    expect(supplement?.audioAsVoice).toBe(true);
+    expect(supplement?.spokenText).toBe("Inspect code, patch it, run tests.");
+    expect(supplement?.ttsSupplement).toEqual({
+      spokenText: "Inspect code, patch it, run tests.",
+      visibleTextAlreadyDelivered: true,
+    });
+    const durableStatusTtsCall = ttsMocks.maybeApplyTtsToPayload.mock.calls.find(
+      ([call]) =>
+        (call as { kind?: unknown; payload?: ReplyPayload }).kind === "final" &&
+        (call as { payload?: ReplyPayload }).payload?.text === "Inspect code, patch it, run tests.",
+    );
+    expect(durableStatusTtsCall).toBeTruthy();
+  });
+
+  it("keeps durable plan update text when immediate progress TTS fails", async () => {
+    setNoAbort();
+    ttsMocks.resolveTtsConfig.mockReturnValue({
+      mode: "final",
+      progress: {
+        durableStatus: "immediate",
+        livePreview: "off",
+      },
+    });
+    ttsMocks.maybeApplyTtsToPayload.mockRejectedValueOnce(new Error("tts unavailable"));
+    const cfg = {
+      ...emptyConfig,
+      messages: {
+        ...emptyConfig.messages,
+        tts: { progress: { durableStatus: "immediate", livePreview: "off" } },
+      },
+      agents: {
+        defaults: {
+          verboseDefault: "on",
+        },
+      },
+    } satisfies OpenClawConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      ChatType: "direct",
+    });
+
+    const replyResolver = async (_ctx: MsgContext, opts?: GetReplyOptions) => {
+      await opts?.onPlanUpdate?.({
+        phase: "update",
+        explanation: "Inspect code.",
+      });
+      return undefined;
+    };
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+
+    expect(dispatcher.sendToolResult).toHaveBeenCalledTimes(1);
+    expect(dispatcher.sendToolResult).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Inspect code.", isStatusNotice: true }),
+    );
+  });
+
+  it("does not synthesize partial or reasoning previews under durable progress TTS", async () => {
+    setNoAbort();
+    ttsMocks.state.synthesizeFinalAudio = true;
+    ttsMocks.resolveTtsConfig.mockReturnValue({
+      mode: "final",
+      progress: {
+        durableStatus: "immediate",
+        livePreview: "off",
+      },
+    });
+    const cfg = {
+      ...emptyConfig,
+      messages: {
+        ...emptyConfig.messages,
+        tts: { progress: { durableStatus: "immediate", livePreview: "off" } },
+      },
+      agents: {
+        defaults: {
+          verboseDefault: "on",
+        },
+      },
+    } satisfies OpenClawConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      ChatType: "direct",
+    });
+
+    const replyResolver = async (_ctx: MsgContext, opts?: GetReplyOptions) => {
+      await opts?.onPartialReply?.({ text: "draft preview" });
+      await opts?.onReasoningStream?.({ text: "reasoning preview" });
+      return undefined;
+    };
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+
+    expect(ttsMocks.maybeApplyTtsToPayload).not.toHaveBeenCalled();
+    expect(dispatcher.sendToolResult).not.toHaveBeenCalled();
+    expect(dispatcher.sendBlockReply).not.toHaveBeenCalled();
+    expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
   });
 
   it("suppresses generic patch working statuses when verbose is enabled", async () => {

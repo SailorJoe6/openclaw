@@ -5,6 +5,15 @@ export type TtsMode = "final" | "all";
 
 export type TtsAutoMode = "off" | "always" | "inbound" | "tagged";
 
+export type TtsProgressMode = "off" | "immediate";
+
+export type TtsProgressConfig = {
+  /** TTS policy for retained progress/status messages that remain visible. */
+  durableStatus?: TtsProgressMode;
+  /** TTS policy for transient replace-in-place preview updates. */
+  livePreview?: TtsProgressMode;
+};
+
 export type TtsModelOverrideConfig = {
   /** Enable model-provided overrides for TTS. */
   enabled?: boolean;
@@ -60,6 +69,8 @@ export type TtsConfig = {
   enabled?: boolean;
   /** Apply TTS to final replies only or to all replies (tool/block/final). */
   mode?: TtsMode;
+  /** TTS policy for progress/status surfaces. Defaults keep previews and statuses text-only. */
+  progress?: TtsProgressConfig;
   /** Primary TTS provider (fallbacks are automatic). */
   provider?: TtsProvider;
   /** Active TTS persona id. */

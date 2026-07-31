@@ -454,6 +454,33 @@ or auto mode:
 }
 ```
 
+### Progress and status audio
+
+`messages.tts.mode` controls normal assistant reply payloads. `"final"` speaks
+final replies only, while `"all"` also includes tool and block replies. Progress
+surfaces use a separate policy so long-running status updates can be treated
+differently from transient draft previews:
+
+```json5
+{
+  messages: {
+    tts: {
+      auto: "always",
+      mode: "final",
+      progress: {
+        durableStatus: "immediate",
+        livePreview: "off",
+      },
+    },
+  },
+}
+```
+
+`durableStatus` applies to retained progress/status messages that stay visible
+in the chat history. `livePreview` applies to replace-in-place preview updates.
+Both default to `"off"`, and `"all"` does not enable either progress policy by
+itself.
+
 ## Personas
 
 A **persona** is a stable spoken identity that can be applied deterministically
@@ -780,6 +807,12 @@ Reply -> TTS enabled?
     </ParamField>
     <ParamField path="mode" type='"final" | "all"' default="final">
       `"all"` includes tool/block replies in addition to final replies.
+    </ParamField>
+    <ParamField path="progress.durableStatus" type='"off" | "immediate"' default="off">
+      TTS policy for retained progress/status messages that remain visible in chat history.
+    </ParamField>
+    <ParamField path="progress.livePreview" type='"off" | "immediate"' default="off">
+      TTS policy for transient replace-in-place preview updates. Keep this off unless the channel intentionally supports spoken preview updates.
     </ParamField>
     <ParamField path="provider" type="string">
       Speech provider id. When unset, OpenClaw uses the first configured provider in registry auto-select order. Legacy `provider: "edge"` is rewritten to `"microsoft"` by `openclaw doctor --fix`.

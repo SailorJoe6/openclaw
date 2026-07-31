@@ -101,6 +101,7 @@ import { resolveSilentReplyPolicyFromPolicies } from "../../shared/silent-reply-
 import { createTtsDirectiveTextStreamCleaner } from "../../tts/directives.js";
 import {
   normalizeTtsAutoMode,
+  resolveConfiguredTtsProgress,
   resolveConfiguredTtsMode,
   shouldCleanTtsDirectiveText,
   shouldAttemptTtsPayload,
@@ -3078,12 +3079,7 @@ export async function dispatchReplyFromConfig(
       const payload: ReplyPayload = {
         text: `Working: ${normalizedLabel}`,
       };
-      if (shouldRouteToOriginating) {
-        await sendPayloadAsync(payload, undefined, false);
-        return;
-      }
-      markInboundDedupeReplayUnsafe();
-      dispatcher.sendToolResult(payload);
+      await sendDurableStatusPayload(payload);
     };
     const sendPlanUpdate = async (payload: {
       explanation?: string;
@@ -3101,12 +3097,77 @@ export async function dispatchReplyFromConfig(
         text: formatPlanUpdateText(payload),
         isStatusNotice: true,
       };
+      await sendDurableStatusPayload(replyPayload);
+    };
+    const maybeBuildDurableStatusTtsSupplement = async (
+      payload: ReplyPayload,
+    ): Promise<ReplyPayload | undefined> => {
+      const progressTts = resolveConfiguredTtsProgress(cfg, {
+        agentId: sessionAgentId,
+        channelId: deliveryChannel,
+        accountId: replyRoute.accountId,
+      });
+      if (progressTts.durableStatus !== "immediate") {
+        return undefined;
+      }
+      const spokenText = normalizeOptionalString(payload.text);
+      if (!spokenText) {
+        return undefined;
+      }
+      try {
+        const { maybeApplyTtsToPayload } = await loadTtsRuntime();
+        const ttsPayload = await maybeApplyTtsToPayload({
+          payload: {
+            ...payload,
+            isStatusNotice: undefined,
+          },
+          cfg,
+          channel: deliveryChannel,
+          kind: "final",
+          inboundAudio,
+          ttsAuto: sessionTtsAuto,
+          agentId: sessionAgentId,
+          accountId: replyRoute.accountId,
+        });
+        if (!resolveSendableOutboundReplyParts(ttsPayload).hasMedia) {
+          return undefined;
+        }
+        return await normalizeReplyMediaPayload(
+          markReplyPayloadAsTtsSupplement(
+            {
+              ...ttsPayload,
+              text: undefined,
+            },
+            spokenText,
+            { visibleTextAlreadyDelivered: true },
+          ),
+        );
+      } catch (error) {
+        logVerbose(
+          `dispatch-from-config: durable status TTS skipped: ${formatErrorMessage(error)}`,
+        );
+        return undefined;
+      }
+    };
+    const sendDurableStatusPayload = async (payload: ReplyPayload): Promise<void> => {
       if (shouldRouteToOriginating) {
-        await sendPayloadAsync(replyPayload, undefined, false);
+        await sendPayloadAsync(payload, undefined, false);
+        const supplement = await maybeBuildDurableStatusTtsSupplement(payload);
+        if (supplement) {
+          await sendPayloadAsync(supplement, undefined, false);
+        }
         return;
       }
       markInboundDedupeReplayUnsafe();
-      dispatcher.sendToolResult(replyPayload);
+      const didQueue = dispatcher.sendToolResult(payload);
+      if (!didQueue) {
+        return;
+      }
+      const supplement = await maybeBuildDurableStatusTtsSupplement(payload);
+      if (supplement) {
+        markInboundDedupeReplayUnsafe();
+        dispatcher.sendToolResult(supplement);
+      }
     };
     const summarizeApprovalLabel = (payload: {
       status?: string;
